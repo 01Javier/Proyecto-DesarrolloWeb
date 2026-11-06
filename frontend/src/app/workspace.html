@@ -1,0 +1,280 @@
+<div class="app" [class.dark-mode]="tema() === 'dark'">
+  <header class="navbar">
+    <nav>
+      <div class="nav-item">
+        <button type="button" (click)="alternarMenu('lecciones')">Lecciones</button>
+        @if (menu() === 'lecciones') {
+          <div class="dropdown">
+            <button type="button" (click)="abrirDialogo('catalogo')">Abrir lección</button>
+            <button type="button" [disabled]="!leccion()" (click)="cerrarLeccion()">Cerrar lección</button>
+          </div>
+        }
+      </div>
+
+      <div class="nav-item">
+        <button type="button" (click)="alternarMenu('config')">Configuración</button>
+        @if (menu() === 'config') {
+          <div class="dropdown settings">
+            <label for="tema">Tema</label>
+            <select id="tema" [ngModel]="tema()" (ngModelChange)="tema.set($event)">
+              <option value="light">Claro</option>
+              <option value="dark">Oscuro</option>
+            </select>
+            <label>Tamaño de fuente</label>
+            <div class="font-controls">
+              <button type="button" [disabled]="fuente() <= 13" (click)="cambiarFuente(-1)">−</button>
+              <span>{{ fuente() }} px</span>
+              <button type="button" [disabled]="fuente() >= 21" (click)="cambiarFuente(1)">+</button>
+            </div>
+            @if (admin()) {
+              <hr />
+              <button type="button" (click)="archivo.click(); menu.set(null)">Importar lecciones (zip)</button>
+              <button type="button" (click)="exportar()">Exportar lecciones</button>
+              <button type="button" (click)="abrirDialogo('eliminar')">Eliminar una lección</button>
+            }
+          </div>
+        }
+      </div>
+
+      <div class="nav-item">
+        <button type="button" (click)="alternarMenu('historial')">Historial</button>
+        @if (menu() === 'historial') {
+          <div class="dropdown">
+            <button type="button" (click)="abrirDialogo('historial')">Ver historial</button>
+          </div>
+        }
+      </div>
+
+      <div class="nav-item">
+        <button type="button" (click)="alternarMenu('admin')">Administración</button>
+        @if (menu() === 'admin') {
+          <div class="dropdown">
+            @if (admin()) {
+              <span class="usuario-actual">Sesión: {{ admin() }}</span>
+              <button type="button" (click)="abrirDialogo('usuarios')">Administradores</button>
+              <button type="button" (click)="abrirDialogo('estadisticas')">Estadísticas de visitas</button>
+              <button type="button" (click)="cerrarSesionAdmin()">Cerrar sesión</button>
+            } @else {
+              <button type="button" (click)="abrirDialogo('login')">Iniciar sesión</button>
+            }
+          </div>
+        }
+      </div>
+
+      <button type="button" (click)="abrirDialogo('ayuda')">Ayuda</button>
+    </nav>
+  </header>
+
+  <input #archivo type="file" accept=".zip,application/zip" hidden (change)="importar($event)" />
+
+  <main>
+    <section class="lesson-header">
+      <div>
+        <h2>{{ leccion()?.nombre ?? 'Ninguna lección abierta' }}</h2>
+        <p>
+          @if (leccion(); as l) {
+            Meta: {{ objetivoTexto(l.objetivo) }}
+            @if (completada()) { · <strong class="ok">Completada</strong> }
+          } @else {
+            Selecciona una lección para comenzar.
+          }
+        </p>
+      </div>
+      <button class="primary" type="button" (click)="abrirDialogo('catalogo')">Abrir lección</button>
+    </section>
+
+    <section class="workspace">
+      <section class="card lesson-card">
+        <div class="card-header">
+          <h3>Lección</h3>
+        </div>
+        <div class="lesson-content" [style.fontSize.px]="fuente()">
+          @if (leccion()) {
+            <article [innerHTML]="html()"></article>
+          } @else {
+            <p>No hay una lección abierta.</p>
+          }
+        </div>
+      </section>
+
+      <section class="card editor-card">
+        <div class="card-header">
+          <h3>Editor de código</h3>
+          <span>Main.java</span>
+        </div>
+        <textarea
+          id="code-editor"
+          [ngModel]="codigo()"
+          (ngModelChange)="codigo.set($event); compilado.set(false)"
+          [disabled]="!leccion()"
+          [style.fontSize.px]="fuente()"
+          spellcheck="false"
+          placeholder="Escribe aquí tu código Java..."
+        ></textarea>
+
+        <div class="actions">
+          <button type="button" [disabled]="!leccion() || ocupado()" (click)="compilar()">Compilar</button>
+          <button type="button" [disabled]="!leccion() || ocupado() || !compilado()" title="Se habilita cuando la última compilación fue exitosa" (click)="ejecutar()">Ejecutar</button>
+        </div>
+
+        <div class="console">
+          <h3>Consola</h3>
+          <pre>{{ consola() }}</pre>
+        </div>
+      </section>
+    </section>
+  </main>
+
+  @if (aviso()) {
+    <div class="aviso" role="status" (click)="aviso.set('')">{{ aviso() }}</div>
+  }
+
+  @if (dialogo(); as d) {
+    <div class="overlay" (click)="cerrarDialogo()">
+      <section class="dialog" [class.ancho]="d === 'historial' || d === 'usuarios' || d === 'estadisticas'" role="dialog" aria-modal="true" (click)="$event.stopPropagation()">
+        <div class="dialog-header">
+          <h2>
+            @switch (d) {
+              @case ('catalogo') { Abrir lección }
+              @case ('eliminar') { Eliminar una lección }
+              @case ('historial') { Historial }
+              @case ('login') { Iniciar sesión }
+              @case ('usuarios') { Administradores }
+              @case ('estadisticas') { Estadísticas de visitas }
+              @default { Ayuda }
+            }
+          </h2>
+          <button type="button" class="close" (click)="cerrarDialogo()">×</button>
+        </div>
+
+        @switch (d) {
+          @case ('catalogo') {
+            @for (item of lecciones(); track item.id) {
+              <button class="lesson-option" type="button" (click)="abrirLeccion(item)">
+                <strong>{{ item.nombre }}</strong>
+                <span>{{ objetivoTexto(item.objetivo) }}</span>
+              </button>
+            } @empty {
+              <p>No hay lecciones disponibles.</p>
+            }
+          }
+
+          @case ('eliminar') {
+            @for (item of lecciones(); track item.id) {
+              <div class="fila">
+                <span>{{ item.nombre }}</span>
+                <button type="button" class="peligro" (click)="eliminarLeccion(item)">Eliminar</button>
+              </div>
+            } @empty {
+              <p>No hay lecciones.</p>
+            }
+          }
+
+          @case ('historial') {
+            @if (registros().length) {
+              <table>
+                <thead>
+                  <tr><th>Lección</th><th>Inicio</th><th>Fin</th><th>Estado</th></tr>
+                </thead>
+                <tbody>
+                  @for (r of registros(); track r.id) {
+                    <tr>
+                      <td>{{ r.leccionNombre }}</td>
+                      <td>{{ r.fechaInicio | date: 'dd/MM/yyyy HH:mm:ss' }}</td>
+                      <td>{{ r.fechaFin ? (r.fechaFin | date: 'dd/MM/yyyy HH:mm:ss') : '—' }}</td>
+                      <td>{{ r.completada ? 'Completada' : 'Pendiente' }}</td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            } @else {
+              <p>Todavía no has abierto lecciones.</p>
+            }
+            <p><button type="button" (click)="cerrarDialogo()">Cerrar</button></p>
+          }
+
+          @case ('login') {
+            <div class="campo">
+              <label for="login-usuario">Usuario</label>
+              <input id="login-usuario" type="text" [(ngModel)]="loginUsuario" autocomplete="username" />
+            </div>
+            <div class="campo">
+              <label for="login-clave">Contraseña</label>
+              <input id="login-clave" type="password" [(ngModel)]="loginClave" autocomplete="current-password" (keydown.enter)="iniciarSesionAdmin()" />
+            </div>
+            <button class="primary" type="button" (click)="iniciarSesionAdmin()">Entrar</button>
+          }
+
+          @case ('usuarios') {
+            <table>
+              <thead>
+                <tr><th>Usuario</th><th>Creado</th><th></th></tr>
+              </thead>
+              <tbody>
+                @for (u of usuarios(); track u.id) {
+                  <tr>
+                    <td>{{ u.nombreUsuario }}</td>
+                    <td>{{ u.creadoEn | date: 'dd/MM/yyyy' }}</td>
+                    <td class="acciones">
+                      <button type="button" (click)="editarUsuario(u)">Editar</button>
+                      <button type="button" class="peligro" (click)="eliminarUsuario(u)">Eliminar</button>
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+            <h3>{{ editandoId() === null ? 'Nuevo administrador' : 'Editar administrador' }}</h3>
+            <div class="campo">
+              <label for="u-nombre">Usuario</label>
+              <input id="u-nombre" type="text" [(ngModel)]="formUsuario" />
+            </div>
+            <div class="campo">
+              <label for="u-clave">Contraseña @if (editandoId() !== null) { (déjala vacía para no cambiarla) }</label>
+              <input id="u-clave" type="password" [(ngModel)]="formClave" autocomplete="new-password" />
+            </div>
+            <button class="primary" type="button" (click)="guardarUsuario()">Guardar</button>
+            @if (editandoId() !== null) {
+              <button type="button" (click)="cancelarEdicion()">Cancelar</button>
+            }
+          }
+
+          @case ('estadisticas') {
+            <div class="filtros">
+              <div class="campo">
+                <label for="desde">Desde</label>
+                <input id="desde" type="date" [(ngModel)]="desde" />
+              </div>
+              <div class="campo">
+                <label for="hasta">Hasta</label>
+                <input id="hasta" type="date" [(ngModel)]="hasta" />
+              </div>
+              <button class="primary" type="button" (click)="consultarEstadisticas()">Consultar</button>
+            </div>
+            @if (estadisticas(); as e) {
+              <p>Visitas: <strong>{{ e.visitasTotales }}</strong> · Visitantes únicos: <strong>{{ e.visitantesUnicos }}</strong></p>
+              <div class="grafica">
+                @for (dia of e.porDia; track dia.fecha) {
+                  <div class="barra-fila">
+                    <span>{{ dia.fecha }}</span>
+                    <div class="barra" [style.width.%]="(dia.visitas / maxVisitas()) * 100"></div>
+                    <span>{{ dia.visitas }}</span>
+                  </div>
+                }
+              </div>
+            }
+          }
+
+          @default {
+            <ol>
+              <li>Abre una lección desde el menú Lecciones.</li>
+              <li>Lee la explicación y escribe el código en el editor.</li>
+              <li>Presiona Compilar o Ejecutar y revisa la consola.</li>
+              <li>Cuando cumplas la meta, la lección queda como Completada en el Historial.</li>
+            </ol>
+            <button class="primary" type="button" (click)="cerrarDialogo()">Cerrar</button>
+          }
+        }
+      </section>
+    </div>
+  }
+</div>

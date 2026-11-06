@@ -1,0 +1,45 @@
+services:
+  db:
+    image: mariadb:11
+    restart: unless-stopped
+    environment:
+      MARIADB_DATABASE: guali
+      MARIADB_USER: guali
+      MARIADB_PASSWORD: ${DB_PASSWORD:?define DB_PASSWORD en .env}
+      MARIADB_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:?define DB_ROOT_PASSWORD en .env}
+    volumes:
+      - datos:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: mariadb
+      SPRING_DATASOURCE_URL: jdbc:mariadb://db:3306/guali
+      SPRING_DATASOURCE_USERNAME: guali
+      SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD}
+      GUALI_ADMIN_USUARIO: ${ADMIN_USUARIO:-admin}
+      GUALI_ADMIN_CLAVE: ${ADMIN_CLAVE:?define ADMIN_CLAVE en .env}
+    mem_limit: 768m
+    cpus: 1.5
+    pids_limit: 200
+
+  web:
+    build: ./frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "${PUERTO_WEB:-80}:80"
+
+
+volumes:
+  datos:
